@@ -1,0 +1,497 @@
+---
+description: "Code search strategy: vfs for navigation, Grep/Read for understanding. Combine both to avoid hallucination."
+alwaysApply: true
+---
+
+# Code Search Strategy: Navigate → Understand → Analyze
+
+> **Multi-layered approach**: vfs for navigation, gkg for deep understanding, Grep/Read for targeted analysis.
+> Never assume behavior from signatures alone — that causes hallucination.
+
+## Tool Availability & Installation
+
+### gkg MCP Setup (Optional but Recommended)
+
+gkg provides advanced code analysis capabilities. If not available, the workflow gracefully falls back to vfs + Grep + Read.
+
+**To check if gkg is available:**
+- Try any gkg MCP call (e.g., `search_codebase_definitions`)
+- If it errors with "server not found" or similar, gkg is not installed
+
+**If gkg is unavailable, you can:**
+1. **Notify user once per session**: "gkg MCP not available. Install for enhanced code analysis or proceed with vfs+Grep?"
+2. **Proceed silently**: Use vfs + Grep + Read workflow (perfectly functional)
+3. **User choice**: Let user decide whether to install gkg or continue
+
+**Installation guidance for users:**
+- gkg is a separate MCP server that indexes codebases for semantic search
+- Installation varies by system - refer to gkg documentation
+- Not required - vfs + Grep + Read provides solid code analysis
+
+## Tool Capabilities Overview
+
+### vfs (Navigation Layer)
+- **Purpose**: Fast location of definitions across large codebases
+- **Output**: Exported signatures with bodies stripped
+- **Strengths**: Lightning-fast AST parsing, broad language support
+- **Limitations**: No implementation details, no call relationships
+
+### gkg (Understanding Layer) 
+- **Purpose**: Deep code analysis with full context and relationships
+- **Output**: Complete definitions, call graphs, import analysis, cross-references
+- **Strengths**: Full implementation bodies, usage patterns, dependency mapping
+- **Limitations**: Requires indexed project, slower than vfs
+
+### Grep/Read (Targeted Analysis)
+- **Purpose**: String search, file reading, debugging specific issues
+- **Output**: Raw file content, search matches
+- **Strengths**: Works on any text, no indexing required
+- **Limitations**: No semantic understanding, manual interpretation needed
+
+## The Three-Layer Strategy
+
+**Layer 1 (Navigate)**: vfs → "Where is it?"  
+**Layer 2 (Understand)**: gkg → "How does it work?" *(fallback: Read)*  
+**Layer 3 (Analyze)**: Grep/Read → "What are the details?"
+
+> **Graceful Degradation**: If gkg MCP is unavailable, Layer 2 falls back to Read + Grep. The workflow remains functional but requires more manual analysis.
+
+## Step 1: Classify Your Intent
+
+Before searching, determine what you need:
+
+| Intent | Description | Workflow | Tools |
+|--------|-------------|----------|-------|
+| **Locate** | "Which file defines X?" | Navigate only | vfs → done |
+| **Understand** | "How does X work?" | Navigate → Understand | vfs → gkg → targeted Read |
+| **Modify** | "Change how X behaves" | Navigate → Understand → Analyze | vfs → gkg → Grep (callers) |
+| **Debug** | "Why does X fail?" | Analyze → Understand | Grep (errors) → gkg (call paths) |
+| **Explore** | "What's in this codebase?" | Navigate → Map | vfs (overview) → gkg (repo_map) |
+| **Impact** | "What uses function X?" | Navigate → Relationships | vfs → gkg (get_references) |
+
+## Step 2: Navigate (vfs for location)
+
+Use vfs as the **first step** to locate definitions — then proceed to deeper analysis.
+
+### vfs Access Priority: MCP First, CLI Fallback
+
+```
+Step,Name,Action,Condition,Result
+1,MCP,"CallMcpTool(server: user-user-vfs, toolName: search, ...)",success,Use MCP for all vfs operations
+1,MCP,"CallMcpTool(server: user-user-vfs, toolName: search, ...)",failure/error,Go to step 2
+2,CLI fallback,"run `command -v vfs` in Shell",found,"Use `vfs <path> -f <pattern>` via Shell"
+2,CLI fallback,"run `command -v vfs` in Shell",not found,Go to step 3
+3,Grep/Read fallback,"Fall back to Grep/Read silently",,Notify user once per session if needed; Do NOT block progress
+```
+
+### vfs MCP Calls (preferred)
+
+Server: **`user-user-vfs`**
+
+> **CRITICAL: MCP calls MUST use absolute paths.** Always use the full workspace path from `<user_info>`.
+
+```
+# Find definitions by name
+CallMcpTool(server: "user-user-vfs", toolName: "search", arguments: { "paths": ["/absolute/path/to/workspace"], "pattern": "HandleLogin" })
+
+# List all exports from a directory
+CallMcpTool(server: "user-user-vfs", toolName: "extract", arguments: { "paths": ["/absolute/path/to/workspace/internal/handlers"] })
+```
+
+### vfs CLI Calls (fallback only)
+
+```bash
+vfs <path> -f <pattern>           # filter signatures (case-insensitive)
+vfs .                             # all exported sigs in current project
+vfs ./internal ./pkg              # scan specific directories
+```
+
+## Step 3: Understand (gkg for deep analysis)
+
+> **NEVER assume you understand behavior from signatures alone.**
+> Use gkg to get complete implementations with full context.
+
+After vfs locates definitions, use gkg for deeper understanding:
+
+### gkg Availability & Language Support Check
+
+**Before using gkg, verify it's available and supports the language:**
+
+```
+Step,Action,Condition,Result
+1,"Try gkg MCP call (any tool)",success,"Use full gkg workflow"
+1,"Try gkg MCP call (any tool)",error/unavailable,"Go to step 2"
+1,"Check language support",unsupported language,"Use vfs+Grep workflow (legacy mode)"
+2,"Notify user once per session","gkg not available","Ask: install gkg or proceed with vfs+Grep?"
+3,"User choice or fallback","install/proceed","Use vfs+Grep workflow (legacy mode)"
+```
+
+> **Important**: If gkg is unavailable or does not support the language you are working with, do NOT block progress. Fall back to vfs + Grep + Read workflow silently for lightweight search.
+
+### gkg MCP Server: `user-gkg`
+
+**Core Tools:**
+
+| Tool | Purpose | When to Use |
+|------|---------|-------------|
+| `search_codebase_definitions` | Find multiple definitions | Initial exploration, broad search |
+| `read_definitions` | Get complete implementation bodies | Understanding how code works |
+| `get_references` | Find all callers/usages | Impact analysis, refactoring prep |
+| `get_definition` | Resolve symbol on specific line | Jump-to-definition, call tracing |
+| `repo_map` | High-level codebase structure | Architecture overview, onboarding |
+| `import_usage` | Analyze dependency patterns | Library usage, migration planning |
+
+### Workflow by Intent
+
+#### Locate Intent — vfs only
+```
+vfs search → found fare.go:42: func CalculateFare(...)
+Answer: "CalculateFare is defined in internal/services/fare.go at line 42."
+Done.
+```
+
+#### Understand Intent — vfs → gkg (preferred) or vfs → Read (fallback)
+```
+Preferred (gkg available):
+1. vfs search → found fare.go:42: func CalculateFare(...)
+2. gkg read_definitions → get complete function body + context
+3. Optional: gkg get_references → see how it's used
+
+Fallback (gkg unavailable):
+1. vfs search → found fare.go:42: func CalculateFare(...)
+2. Read: fare.go L1-20 (imports) + L42-90 (full function body)
+3. Grep: "CalculateFare" → find usage patterns manually
+```
+
+#### Modify Intent — vfs → gkg → analysis (preferred) or vfs → Read → Grep (fallback)
+```
+Preferred (gkg available):
+1. vfs search → found fare.go:42: func CalculateFare(...)
+2. gkg read_definitions → understand current implementation
+3. gkg get_references → find all callers (impact analysis)
+4. Targeted Read/Grep → examine specific usage patterns
+
+Fallback (gkg unavailable):
+1. vfs search → found fare.go:42: func CalculateFare(...)
+2. Read: fare.go L1-20 (imports) + L42-90 (full body)
+3. Grep: "CalculateFare" across codebase → find all callers manually
+4. Read: caller files → understand usage context
+```
+
+#### Debug Intent — gkg-first (preferred) or Grep-first (fallback)
+```
+Preferred (gkg available):
+1. gkg search_codebase_definitions → find error-related functions
+2. gkg read_definitions → get implementation details
+3. gkg get_references → trace call paths
+4. Grep → search for error messages, logs
+
+Fallback (gkg unavailable):
+1. Grep: "error message" or function names → find error locations
+2. Read: error handling code → understand failure paths
+3. Grep: function names → trace call chains manually
+4. vfs search → locate related definitions
+```
+
+#### Explore Intent — repo mapping (preferred) or manual exploration (fallback)
+```
+Preferred (gkg available):
+1. gkg repo_map → get high-level structure
+2. vfs extract → get signatures for interesting directories
+3. gkg read_definitions → dive into key components
+
+Fallback (gkg unavailable):
+1. vfs extract → get signatures from key directories
+2. Read: key files → understand structure manually
+3. Grep: patterns → find relationships and dependencies
+```
+
+## Step 4: Analyze (Grep/Read for specifics)
+
+Use Grep/Read for targeted analysis after understanding the big picture:
+
+### When to Use Grep/Read Directly
+
+1. **You already know the exact file and line** — just Read it
+2. **Searching inside function bodies** — string literals, config keys, error messages
+3. **Non-code files** — JSON, CSS, Markdown, `.env`, configuration
+4. **The user gave you a file path** — e.g. "look at line 50 of client.go"
+5. **String pattern matching** — log messages, error codes, specific text
+6. **Quick verification** — check specific implementation details
+
+### When gkg is Better Than Grep
+
+- **Finding callers/usages** — gkg `get_references` vs Grep pattern matching
+- **Understanding call chains** — gkg provides semantic context
+- **Cross-file relationships** — gkg tracks imports and dependencies
+- **Refactoring impact** — gkg shows all affected locations with context
+
+## Generated Files
+
+vfs automatically skips protobuf-generated files (`*.pb.go`, `*_pb2.py`, `*_pb.js`, `*_pb.ts`, `*.pb.dart`, `*_pb.rb`, etc.), other common generated patterns (`.g.dart`, `.generated.cs`, `.freezed.dart`), and Solidity test/script files (`*.t.sol`, `*.s.sol` from Foundry). They will not appear in search results.
+
+If you encounter a generated file through Grep or Read, **do not modify it** — find and edit the source (`.proto`, codegen config) instead.
+
+## Complete Workflow Examples
+
+### Pattern 1: vfs → gkg (Recommended when available)
+
+The most powerful pattern for deep understanding:
+
+```
+# 1. Navigate: locate the definition
+vfs search("CalculateFare") → internal/services/fare.go:42
+
+# 2. Understand: get complete implementation + context
+gkg read_definitions([{names: ["CalculateFare"], file_path: "internal/services/fare.go"}])
+  → Complete function body, imports, dependencies
+
+# 3. Analyze: find all usage patterns
+gkg get_references(definition_name: "CalculateFare", file_path: "internal/services/fare.go")
+  → All callers with context, not just string matches
+
+# Result: Complete understanding of definition + usage + relationships
+```
+
+### Pattern 1b: vfs → Read + Grep (Fallback when gkg unavailable)
+
+Classic approach when gkg MCP is not installed:
+
+```
+# 1. Navigate: locate the definition
+vfs search("CalculateFare") → internal/services/fare.go:42
+
+# 2. Understand: read complete implementation + context
+Read: internal/services/fare.go L1-20 (imports + package context)
+Read: internal/services/fare.go L42-90 (complete function body)
+
+# 3. Analyze: find all usage patterns manually
+Grep: "CalculateFare" across internal/
+  → internal/services/booking.go:88: resp, err := s.CalculateFare(req)
+  → internal/services/fare_test.go:12: ...
+Read: booking.go L80-95 (caller context)
+
+# Result: Manual but thorough understanding of definition + usage
+```
+
+### Pattern 2: gkg → vfs (Exploration when gkg available)
+
+For discovering unfamiliar codebases:
+
+```
+# 1. Map: get high-level structure
+gkg repo_map(relative_paths: ["src", "internal"], depth: 2)
+  → Directory structure + key definitions
+
+# 2. Navigate: explore interesting areas
+vfs extract(paths: ["/abs/path/internal/handlers"])
+  → All exported functions in handlers
+
+# 3. Understand: dive into key components
+gkg read_definitions([{names: ["HandleAuth", "HandlePayment"], file_path: "internal/handlers/auth.go"}])
+  → Complete implementations
+```
+
+### Pattern 2b: vfs → Read (Exploration fallback)
+
+Manual codebase exploration:
+
+```
+# 1. Navigate: get overview of key areas
+vfs extract(paths: ["/abs/path/internal/handlers"])
+  → All exported functions in handlers
+vfs extract(paths: ["/abs/path/internal/services"])
+  → All exported functions in services
+
+# 2. Read: examine key files for structure
+Read: internal/handlers/auth.go L1-50 (understand auth flow)
+Read: internal/services/user.go L1-100 (understand user management)
+
+# 3. Grep: find relationships and patterns
+Grep: "HandleAuth" → see where auth handler is used
+Grep: "UserService" → see service usage patterns
+```
+
+## Hallucination Guardrails
+
+These are hard rules to prevent false confidence:
+
+1. **Never describe what a function "does" based only on its name/signature.** You must Read the body first. A function named `GetAddress` might create addresses, call external APIs, or have side effects the name doesn't reveal.
+2. **Never assume a function follows a pattern** just because other functions in the same file do. Always verify by reading the specific body.
+3. **If you're about to say "this function probably..."** — STOP. That word "probably" means you haven't read the implementation. Read it first.
+4. **After vfs, ask yourself: "Do I need to understand the behavior, or just the location?"** If behavior, you MUST Read the body before proceeding.
+5. **When making code changes**, always Read the full function body AND Grep for callers. Never modify a function based on signature alone.
+
+## MCP Tools Reference
+
+### vfs Server: `user-user-vfs` (Navigation)
+
+| Tool | Purpose | Parameters | Example |
+|------|---------|------------|---------|
+| `search` | Find definitions by name | `paths: string[]`, `pattern: string` | `search(paths: ["/abs/path"], pattern: "auth")` |
+| `extract` | List all exported signatures | `paths: string[]` | `extract(paths: ["/abs/path/internal/handlers"])` |
+| `list_languages` | Supported languages | none | `list_languages()` |
+
+### gkg Server: `user-gkg` (Understanding)
+
+| Tool | Purpose | Parameters | Example |
+|------|---------|------------|---------|
+| `search_codebase_definitions` | Find multiple definitions | `search_terms: string[]`, `project_absolute_path: string` | Find functions/classes across codebase |
+| `read_definitions` | Get complete implementations | `definitions: [{names: string[], file_path: string}]` | Read function bodies with full context |
+| `get_references` | Find all callers/usages | `definition_name: string`, `absolute_file_path: string` | Impact analysis, refactoring prep |
+| `get_definition` | Resolve symbol on line | `absolute_file_path: string`, `line: string`, `symbol_name: string` | Jump-to-definition |
+| `repo_map` | Codebase structure overview | `project_absolute_path: string`, `relative_paths: string[]` | Architecture exploration |
+| `import_usage` | Analyze dependencies | `project_absolute_path: string`, `packages: object[]` | Library usage patterns |
+
+> **CRITICAL**: Both servers require absolute paths. Use workspace path from `<user_info>`.
+
+## Stats Recording
+
+Recording is on by default — leave it. Never pass `--no-record` unless explicitly testing.
+
+- History: `~/.vfs/history.jsonl`
+- Summary: `vfs stats` (CLI only)
+
+## Detailed Examples
+
+### Locate — "where is the fare logic?"
+```
+vfs search("fare") → internal/services/fare.go:42: func CalculateFare(...)
+Answer: "CalculateFare is defined in internal/services/fare.go at line 42."
+```
+
+### Understand — "how does fare calculation work?"
+```
+Preferred (gkg available):
+1. vfs search("CalculateFare") → internal/services/fare.go:42
+2. gkg read_definitions([{names: ["CalculateFare"], file_path: "internal/services/fare.go"}])
+   → Complete function body + imports + context
+3. Describe behavior based on actual implementation, not assumptions
+
+Fallback (gkg unavailable):
+1. vfs search("CalculateFare") → internal/services/fare.go:42
+2. Read: fare.go L1-20 (imports) + L42-90 (full function body)
+3. Describe behavior based on what you read, not what you assumed
+Now describe the behavior based on what you READ, not what you assumed.
+```
+
+### Modify — "change fare calculation to add surcharge"
+```
+vfs search("CalculateFare") → internal/services/fare.go:42
+Read: fare.go L1-20     ← imports
+Read: fare.go L42-90    ← full body — understand current logic
+Grep: "CalculateFare"   ← find all callers to assess impact
+Now make the change with full context.
+```
+
+### Debug — skip vfs, go straight to bodies
+```
+Grep: "fare calculation failed" in internal/   ← find the error message
+Read: fare.go L55-80                           ← read the error path
+Grep: "CalculateFare" in internal/             ← trace the call chain
+```
+
+### Explore — "what's the architecture of this payment system?"
+```
+1. gkg repo_map(relative_paths: ["internal/payment", "pkg/billing"], depth: 2)
+   → High-level structure
+2. vfs extract(paths: ["/abs/path/internal/payment"])
+   → All exported functions
+3. gkg read_definitions → dive into key components
+```
+
+### Impact Analysis — "what would break if I change this API?"
+```
+1. vfs search("ProcessPayment") → locate definition
+2. gkg get_references(definition_name: "ProcessPayment", file_path: "...")
+   → All callers with context lines
+3. gkg read_definitions → understand caller implementations
+4. Assess impact with complete context
+```
+
+### When Grep IS Still the Right First Tool
+```
+Grep: "INVALID_API_KEY" in ./internal/     ← string literal inside function body
+Grep: "database_url" in ./*.env            ← non-code file
+Read: handlers/upload.go L42-60            ← user gave exact file path
+```
+
+## Supported File Types
+
+| Language        | Extensions                              |
+|-----------------|-----------------------------------------|
+| Go              | `.go`                                   |
+| JavaScript      | `.js`, `.mjs`, `.cjs`, `.jsx`           |
+| TypeScript      | `.ts`, `.mts`, `.cts`, `.tsx`           |
+| Python          | `.py`                                   |
+| Rust            | `.rs`                                   |
+| Java            | `.java`                                 |
+| C#              | `.cs`                                   |
+| Dart            | `.dart`                                 |
+| Kotlin          | `.kt`, `.kts`                           |
+| Swift           | `.swift`                                |
+| Ruby            | `.rb`                                   |
+| Solidity        | `.sol`                                  |
+| HCL / Terraform | `.tf`, `.hcl`                           |
+| Dockerfile      | `Dockerfile`, `Dockerfile.*`, `*.dockerfile` |
+| Protobuf        | `.proto`                                |
+| SQL             | `.sql`                                  |
+| YAML            | `.yml`, `.yaml`                         |
+
+For anything not in this table, use Grep/rg directly.
+
+## Self-Check Before Answering
+
+After searching and reading, ask yourself these questions before responding:
+
+1. **Did I get the complete implementation?** If I'm describing behavior and only have a signature — use gkg `read_definitions` to get the full body.
+2. **Did I understand the dependencies?** Use gkg to see imports and context, not just isolated code snippets.
+3. **Am I saying "probably" or "likely"?** Those words mean I'm guessing. Use gkg to get definitive implementation details.
+4. **For modifications: did I find all affected code?** Use gkg `get_references` for complete impact analysis, not just string matching.
+5. **Is my answer based on actual code or assumptions?** If assumptions, use gkg to read the real implementation.
+6. **Did I consider the call graph?** gkg provides semantic relationships that Grep cannot capture.
+7. **Did user provide a specific snippet range (for example, `Lx-Ly`)?** Evaluate whether full-file context is necessary; when not required for correctness or safety, use the provided segment directly.
+
+## Subagent / Task Tool Delegation
+
+Subagents launched via `Task` do NOT inherit workspace rules.
+
+**When launching ANY subagent that may search code, prepend this to the task prompt:**
+
+```
+Multi-layered code search strategy — vfs + gkg (preferred) or vfs + Grep (fallback):
+
+STEP 0: Check gkg availability and language support
+Try: CallMcpTool(server: "user-gkg", toolName: "search_codebase_definitions", arguments: {...})
+If successful and language is supported → use PREFERRED workflow
+If error/unavailable or language unsupported → use FALLBACK workflow (notify user once per session)
+
+PREFERRED WORKFLOW (gkg available):
+1. NAVIGATE with vfs MCP to locate definitions (never Grep for definitions):
+   CallMcpTool(server: "user-user-vfs", toolName: "search", arguments: { "paths": ["<ABSOLUTE_WORKSPACE_PATH>"], "pattern": "<name>" })
+   Workspace path: <insert workspace path here>
+   CRITICAL: Use ABSOLUTE paths in MCP calls, never relative paths like ".".
+
+2. UNDERSTAND with gkg MCP for complete implementation + context:
+   CallMcpTool(server: "user-gkg", toolName: "read_definitions", arguments: { "definitions": [{"names": ["<name>"], "file_path": "<file_path>"}] })
+   Never assume behavior from signatures alone — get full implementations.
+
+3. ANALYZE relationships with gkg for impact assessment:
+   CallMcpTool(server: "user-gkg", toolName: "get_references", arguments: { "definition_name": "<name>", "absolute_file_path": "<file_path>" })
+   This replaces Grep for finding callers — provides semantic context.
+
+FALLBACK WORKFLOW (gkg unavailable):
+1. NAVIGATE with vfs MCP to locate definitions:
+   CallMcpTool(server: "user-user-vfs", toolName: "search", arguments: { "paths": ["<ABSOLUTE_WORKSPACE_PATH>"], "pattern": "<name>" })
+
+2. UNDERSTAND with Read tool for implementation:
+   Read: <file_path> L1-20 (imports + context) + L<start>-<end> (full function body)
+   Never assume behavior from signatures alone — read full implementations.
+
+3. ANALYZE with Grep for impact assessment:
+   Grep: "<name>" across the codebase to find all callers manually
+   Read: caller files to understand usage context
+
+4. Use Grep/Read directly for: string literals inside bodies, non-code files, debugging specific text.
+5. If MCP errors, try CLI fallbacks: `vfs . -f <name>`. If both fail, fall back to Grep silently.
+```

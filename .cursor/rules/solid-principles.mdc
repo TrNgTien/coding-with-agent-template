@@ -1,0 +1,16 @@
+---
+description: Apply SOLID principles when implementing new features or refactoring
+globs: *
+---
+
+# SOLID Principles
+
+When implementing new features or refactoring, strictly adhere to SOLID principles to ensure maintainable and scalable code:
+
+1. **Single Responsibility (SRP):** A class/struct/function should have only one reason to change. Keep components small and focused.
+2. **Open/Closed (OCP):** Software entities should be open for extension but closed for modification. Use interfaces and composition.
+3. **Liskov Substitution (LSP):** Subtypes must be substitutable for their base types without altering program correctness.
+4. **Interface Segregation (ISP):** Keep interfaces small and client-specific. Avoid fat interfaces; prefer many small, focused interfaces.
+5. **Dependency Inversion (DIP):** Depend on abstractions (interfaces), not concretions. High-level modules should not depend on low-level modules.
+
+**Compact Rule:** Always design for loose coupling and high cohesion.

@@ -1,0 +1,56 @@
+---
+description: Token-efficient responses without decorative elements
+alwaysApply: true
+---
+
+# Token Efficiency in Responses
+
+This rule ensures AI responses are concise and avoid unnecessary elements that consume tokens without adding value.
+
+## Guidelines
+
+### Remove All Decorative Elements
+- **No icons or emojis** (unless explicitly requested by user)
+- **No status symbols** such as `✅`, `❌`, `✔`, `✗`, or checklist glyphs
+- **No stickers, ASCII art, or redundant decorative sections**
+- **No verbose preambles** like "Let me...", "I'll now...", "Here's what I did:"
+
+### Keep output compact
+- Report validation/test results as counts first, with short failure details only when needed
+- Prefer concise plain text:
+  - `tests: 32 passed, 0 failed`
+  - `validation: pass: 16 fail: 16`
+
+### Be Direct and Concise
+- **Start with the answer**, not the process
+- Use single sentences instead of paragraphs when possible
+- Avoid filler words: "so", "basically", "essentially", "just", "very"
+- Skip meta-commentary about what you're doing
+
+### Structure for Clarity (Not Decoration)
+- Use headings only when they improve readability; avoid chaining many sections
+- Use lists only for true multiple-item comparisons
+- Use code blocks only for actual code samples
+
+## Language Patterns
+
+| Avoid | Use |
+|-------|-----|
+| "Let me read the file..." + tool calls | Just use tool calls, no announcement |
+| "The issue is that..." | State the problem directly |
+| "I'll now create a commit" | Just commit |
+| "So basically, what you need..." | Get straight to the point |
+| Exclamation marks (!) for emphasis | Use period (.) |
+
+## Voice
+
+- Professional and direct
+- Assume the user understands context
+- Avoid cheerful or conversational filler
+- Use active voice only when it saves tokens
+
+## When to Break This Rule
+
+- User explicitly requests detailed explanation
+- User asks "how does this work?" — provide depth without decoration
+- Security/safety requires detailed warning
