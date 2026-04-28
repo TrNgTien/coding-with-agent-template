@@ -19,7 +19,7 @@ Please refer `obsidian/` which as a minimal template as you can go.
 ## Combination tools:
 > When agent read, interact with our codebase they using grep, ls tool to searching, which can enhance their understand more than search everything as their intent.
 
-1.[Gkg](https://gitlab-org.gitlab.io/rust/knowledge-graph/getting-started/overview/) - which is the Knowledge Graph by gitlab which help agent understand the relationship of our functions, folders, files
+1.[Gkg](https://gitlab-org.gitlab.io/rust/knowledge-graph/getting-started/overview/) - which is the Knowledge Graph by gitlab which help agent understand the relationship of our functions, folders, files.
 2.[vfs](https://github.com/TrNgTien/vfs) - this tool support agent read the function name, location of function, has a quick overview before reading files that reduce token read.
 
 -> combine 2 of them I already set-up the cursor rule which in file `vfs-agent-search.mdc`
